@@ -2,14 +2,14 @@ package main
 
 import "fmt"
 
-const (
-	lastcount = 10
-	initcount = 100
-)
-
 func main() {
-	const pi = 3.1415926
-	fmt.Println(pi)
-	//pi =90
-	fmt.Println(lastcount, initcount)
+	score := 99
+	if score >= 90 {
+		fmt.Println("Grade A!")
+	} else if score >= 75 {
+		fmt.Println("Grade B!")
+	} else {
+		fmt.Println("Grade C!")
+	}
+
 }
