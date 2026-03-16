@@ -2,28 +2,37 @@ package main
 
 import "fmt"
 
-type Customer struct {
-	FirstName string
-	LastName  string
+// interface embding, go does not support inheritance, composition
+type Reader interface {
+	Read()
+}
+type Writer interface {
+	Write()
+}
+type ReadWriter interface {
+	Reader
+	Writer
+}
+type File struct {
+	Name string
 }
 
-// value receiver: never updates instance members
-func (c Customer) updateName() {
-	c.FirstName = "Subramanian"
-	c.LastName = "Murugan"
+func (f File) Read() {
+	fmt.Println("Read", f.Name)
 }
-
-// pointer/refence receiver updates instance members, because pointers share memory
-func (c *Customer) updateNameUsingReference() {
-	c.FirstName = "Subramanian"
-	c.LastName = "Murugan"
+func (f File) Write() {
+	fmt.Println("Write", f.Name)
+}
+func Process(rw ReadWriter) {
+	rw.Read()
+	rw.Write()
 }
 func main() {
-	customer := Customer{}
-	fmt.Println("Before updateName")
-	fmt.Println(customer.FirstName, customer.LastName)
-	//customer.updateName()
-	customer.updateNameUsingReference()
-	fmt.Println("After updateName")
-	fmt.Println(customer.FirstName, customer.LastName)
+	//file := File{Name: "data.txt"}
+	//var rw ReadWriter = file
+	//var rw ReadWriter = File{Name: "test"}
+	var rw ReadWriter = File{Name: "test"}
+	rw.Read()
+	rw.Write()
+	Process(rw)
 }
