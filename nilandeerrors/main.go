@@ -1,35 +1,28 @@
 package main
 
-import (
-	"errors"
-	"fmt"
-)
+import "fmt"
 
-func divide(a, b int) (int, error) {
-	if b == 0 {
-		return 0, errors.New("divide by zero")
-	}
-	return a / b, nil
+func A() {
+	fmt.Println("A Start")
+	B()
+	fmt.Println("A End")
 }
-func login(username, password string) (string, error) {
-	if username != "admin" && password != "admin" {
-		return "", errors.New("login failed")
-	}
-	return "login success", nil
+func B() {
+	fmt.Println("B Start")
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("recovered", err)
+		}
+	}()
+	C()
+	fmt.Println("B End")
 }
+func C() {
+	//defer println("defered function in C")
 
+	panic("something bad happened")
+}
 func main() {
-	result, err := divide(10, 5)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(result)
-	//status, errorCode := login("admin", "admin")
-	status, errorCode := login("foo", "bar")
-	if errorCode != nil {
-		fmt.Println(errorCode)
-	}
-	fmt.Println(status)
-
+	A()
+	fmt.Println("continue")
 }
