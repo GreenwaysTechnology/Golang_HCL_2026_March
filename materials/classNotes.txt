@@ -1,0 +1,207 @@
+strongly typed or static typed
+ int a=10;
+ a=false;
+
+dynamic typed or weak typed
+var a =10
+a=false
+
+Hello.java ---->compile---->Hello.class(byte code ? has language -asm)---JVM
+
+how jvm translate byte code into native?
+  Interpreter -----takes api line by line---converted into/communicated -- os -JNI
+  JIT - Compiler - runtime compiler 
+
+Hello.c /c++--->compile---->native code(native machine assembly instructions)
+
+main.go ---compile------native code(assembly instrctions)
+
+
+in windows
+ hello.java---compile--bytecode
+ copy the byte code- you can run in Linux 
+
+c/c++
+in windows
+ compiler ---compile to native platform
+
+The same source code can compile on Linux using Linux based compiler
+
+compiler-----
+
+							Shared Memory
+				
+wait,notfiy,notifyall,Synch
+
+	t1                                                                                                         t2
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+all go code is saved with .go 
+
+
+compile-link-execute
+
+***********************************************************************************************************************************************************
+
+Day - 2:
+
+int a ;
+
+int a =1(value /literal)
+String str=null (Object)
+str.toUppercase()
+
+programming paradigms 
+1.procedural style
+2.object oriented style
+3.functional style  - the oldest - the first - 1950 - 1935 - lambda ca
+
+java - object oriented, with functional style  - hybrid
+
+go  is produceral 
+
+functional style or pure functional
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+packages :
+ 
+main application must have main package 
+package test
+
+func main() {
+
+}
+go run main.go
+package command-line-arguments is not a main package
+
+
+go.mod
+
+directive  directiveValue
+
+module  nameofthe module
+go          go version no of this current application
+require  (
+	"dependency of this application"
+)
+replace  module=>../dir
+exclude  libs to be execluded
+
+retract  v1.0.0 - application version management 
+
+module directive:
+.........................
+defines module path(location -uri) 
+
+module   github.com/username or name/projectname/repository-name
+eg:
+module github.com/hcl/cms/cmsrepo
+
+module github.com/gin-gonic/gin
+
+with version no
+module   github.com/username or name/projectname/repository-name/versionNo
+
+java package naming standard
+com.companyName.projectName.moduleName.subModuleName
+org.companyName.projectName.moduleName.subModuleName
+java.lang
+javax
+
+go 
+
+How to download or install third party module ?
+go get github.com/google/uuid
+go: added github.com/google/uuid v1.6.0
+
+go get github.com/google/uuid
+go: added github.com/google/uuid v1.6.0
+
+
+lib downloaded into path:
+C:\Users\subu\go\pkg\mod\github.com\google
+
+color output in terminal
+faith/color
+
+require (
+	github.com/fatih/color v1.18.0
+	github.com/google/uuid v1.6.0
+)
+
+require (
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	golang.org/x/sys v0.25.0 // indirect
+)
+
+When you download any dependency its dependencies called indirect dependencies will be downloaded automatically...
+
+ENV depdency:
+go get github.com/joho/godotenv
+
+add .env file in the root project
+COMPANY_NAME=HCL
+
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/fatih/color"
+	"github.com/google/uuid"
+	"github.com/joho/godotenv"
+)
+
+func main() {
+	godotenv.Load()
+	fmt.Println("Hello World")
+	uuid := uuid.New()
+	fmt.Println(uuid)
+	color.Cyan("Hello World")
+	color.Blue(uuid.String())
+	company := os.Getenv("COMPANY_NAME")
+	fmt.Println(company)
+}
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Pointer:
+
+var a int =10 - ? stack or heap - Escape any
+
+In java
+
+class A {
+	void calculate() {
+
+        }
+}
+A  a = new A()
+a.calculate() ---->
+
+************************************************************************************************************************************************************
+
+var a int =10
+var p *int - pointer to int 
+
+p = &a
+************************************************************************************************************************************************************
+pass by value and pass by reference.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,33 @@
+
+Layers
+employee-app
+ -model
+ -service
+ -repository
+ -controller =>cli based
+ -storage
+
+model
+employee.go
+package model
+
+type Employee struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+Repository:
+package repository
+
+import "github.com/employee/model"
+
+type EmployeeRepository interface {
+	Create(emp model.Employee) error
+	GetAll() ([]model.Employee, error)
+	GetByID(id int) (*model.Employee, error)
+	Update(emp model.Employee) error
+	Delete(id int) error
+}
+
+

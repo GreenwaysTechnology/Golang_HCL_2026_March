@@ -1,0 +1,676 @@
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func printMessage(msg string) {
+	for i := 0; i < 3; i++ {
+		fmt.Println(msg, i)
+		time.Sleep(time.Millisecond * 500)
+	}
+}
+func main() {
+	go printMessage("Goroutine") // runs concurrently
+	printMessage("Main")         // runs in main goroutine
+}
+
+Unbuffered Channel
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch := make(chan string)
+
+	go func() {
+		fmt.Println("Worker: Preparing data...")
+		time.Sleep(2 * time.Second)
+		ch <- "Baton Passed!" // Blocks here until main is ready
+		fmt.Println("Worker: Data sent, I can continue now.")
+	}()
+
+	fmt.Println("Main: Waiting for the worker...")
+	msg := <-ch // Blocks here until the worker sends data
+	fmt.Println("Main: Received:", msg)
+}
+
+signal  not received: dead lock
+
+go run main.go
+Main: Waiting for the worker...
+Worker: Preparing data...
+Worker: Data sent, I can continue now.
+fatal error: all goroutines are asleep - deadlock!
+
+goroutine 1 [chan receive]:
+main.main()
+        G:/HCL/2026/march/mydemos/concurrency/main.go:19 +0x85
+exit status 2
+
+...........
+
+Buffered Channel
+
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	// A channel that can hold 3 integers
+	ch := make(chan int, 3)
+
+	ch <- 1
+	ch <- 2
+	ch <- 3
+	
+	
+	fmt.Println(<-ch) // 1
+	fmt.Println(<-ch) // 2
+	fmt.Println(<-ch)
+}
+
+here buffer size is three, but if you send more values
+
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	// A channel that can hold 3 integers
+	ch := make(chan int, 3)
+
+	ch <- 1
+	ch <- 2
+	ch <- 3
+
+	ch <- 4 // This would block because the buffer is full!
+
+	fmt.Println(<-ch) // 1
+	fmt.Println(<-ch) // 2
+	fmt.Println(<-ch)
+}
+
+fatal error: all goroutines are asleep - deadlock!
+
+goroutine 1 [chan send]:
+main.main()
+        G:/HCL/2026/march/mydemos/concurrency/main.go:14 +0x69
+exit status 2
+
+receive all messages In on short:
+.........................................................
+package main
+
+import "fmt"
+
+func main() {
+	// A channel that can hold 3 integers
+	ch := make(chan int, 3)
+
+	ch <- 1
+	ch <- 2
+	ch <- 3
+
+	for value := range ch {
+		fmt.Println(value) // Prints: 1, 2, 3
+	}
+}
+output:
+> go run main.go
+fatal error: all goroutines are asleep - deadlock!
+
+goroutine 1 [chan send]:
+main.main()
+        G:/HCL/2026/march/mydemos/concurrency/main.go:13 +0x69
+exit status 2
+Step-by-step execution:
+
+Buffered channel created
+
+ch := make(chan int, 3)
+
+→ Can hold 3 values without blocking
+
+You send 3 values
+
+ch <- 1
+ch <- 2
+ch <- 3
+
+→ Channel is now FULL
+
+Range loop starts
+
+for value := range ch
+
+→ This loop keeps reading until channel is CLOSED
+
+Reads values
+
+1
+2
+3
+
+❌ After reading all values:
+
+Channel is EMPTY
+
+BUT still OPEN
+
+👉 Now Go tries to read again
+👉 No sender exists
+👉 No value available
+
+💥 Deadlock happens
+
+⚠️ Key Rule
+
+for range channel only stops when the channel is CLOSED
+
+💣 Why deadlock?
+
+Go runtime checks:
+
+Is there any goroutine that can send? ❌ No
+
+Is main waiting to receive? ✅ Yes
+
+👉 Result:
+
+fatal error: all goroutines are asleep - deadlock!
+
+Fix 1: Close the channel
+package main
+
+import "fmt"
+
+func main() {
+	ch := make(chan int, 3)
+
+	ch <- 1
+	ch <- 2
+	ch <- 3
+
+	close(ch) // ✅ IMPORTANT
+
+	for value := range ch {
+		fmt.Println(value)
+	}
+}
+Real-world analogy
+
+Think of channel like a queue:
+
+You put 3 items in a box 📦
+
+You keep checking the box forever
+
+But no one tells you "no more items coming"
+
+👉 You wait forever → deadlock
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+package main
+
+import "fmt"
+
+func producer(out chan<- int) {
+	for i := 0; i < 5; i++ {
+		out <- i
+	}
+	close(out) // Always close the producer side
+}
+
+func consumer(in <-chan int) {
+	for val := range in {
+		fmt.Println("Consumed:", val)
+	}
+}
+
+func main() {
+	ch := make(chan int) // Unbuffered channel
+
+	// Start consumer first (it will wait)
+	go consumer(ch)
+
+	// Start producer (it sends to waiting consumer)
+	go producer(ch)
+
+	// Give time for both to complete
+	var input string
+	fmt.Scanln(&input) // Wait for Enter
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+With Wait Group:
+.............................
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func producer(out chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for i := 0; i < 5; i++ {
+		out <- i
+	}
+	close(out)
+}
+
+func consumer(in <-chan int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for val := range in {
+		fmt.Println("Consumed:", val)
+	}
+}
+
+func main() {
+	ch := make(chan int)
+	var wg sync.WaitGroup
+
+	wg.Add(2)
+
+	go producer(ch, &wg)
+	go consumer(ch, &wg)
+
+	wg.Wait()
+	fmt.Println("Pipeline complete!")
+}
+
+&&&&&&&&&&&&&&&&&&&&&
+
+Select vs Wait Group:
+...................................
+This is a classic "architectural" choice in Go. While both are used to manage concurrency, they solve fundamentally different problems: Waiting for completion vs. Managing multiple events.
+
+1. sync.WaitGroup (The "Wait for Everyone" Tool)
+Use a WaitGroup when you have a set of tasks and you simply need to stay at a "checkpoint" until every single one is finished. It is a counter, not a communication pipe.
+
+The Use Case: Parallel Processing
+Imagine you are downloading 10 files. You don't care which one finishes first; you just need to wait until all 10 are on your hard drive before you zip them up.
+
+Key Characteristics:
+
+No Data: It doesn't pass results back to you.
+Deterministic: You know exactly how many things you are waiting for.
+Simple: Best for "Fire and forget" goroutines where you just need to synchronize at the end.
+
+WaitGroup Example:
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+func processImage(id int, wg *sync.WaitGroup) {
+	// Schedule the call to Done to ensure the counter decrements
+	// even if the function panics.
+	defer wg.Done()
+
+	fmt.Printf("Image %d: Starting resize...\n", id)
+	time.Sleep(time.Millisecond * 800) // Simulate processing time
+	fmt.Printf("Image %d: Finished!\n", id)
+}
+
+func main() {
+	var wg sync.WaitGroup
+	imagesToProcess := 5
+
+	for i := 1; i <= imagesToProcess; i++ {
+		wg.Add(1) // Tell the counter we are starting 1 task
+		go processImage(i, &wg)
+	}
+
+	fmt.Println("Main: Waiting for all images to finish...")
+	wg.Wait() // This blocks until the counter hits 0
+	fmt.Println("Main: All images processed. Ready to upload!")
+}
+
+Select:
+
+2. select Statement Example: The "First Responder"
+In this example, we simulate a Multi-Source Data Fetcher. We ask two different "Servers" for the same piece of data. Whichever one responds first wins, and if neither responds in 1 second, we time out.
+
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func fetchFromCloud(serverName string, ch chan<- string, delay time.Duration) {
+	time.Sleep(delay)
+	ch <- "Data from " + serverName
+}
+
+func main() {
+	serverA := make(chan string)
+	serverB := make(chan string)
+
+	// Start two concurrent requests with different speeds
+	go fetchFromCloud("Server A", serverA, time.Millisecond*100)
+	go fetchFromCloud("Server B", serverB, time.Millisecond*100)
+
+	// The select statement acts as a race: first channel to send a value wins
+	select {
+	case msg1 := <-serverA:
+		fmt.Println("SUCCESS:", msg1)
+	case msg2 := <-serverB:
+		fmt.Println("SUCCESS:", msg2)
+	case <-time.After(time.Second * 1): // A built-in "safety" timeout
+		fmt.Println("ERROR: Both servers were too slow!")
+	}
+}
+
+&&&&&&&&&&&&&&&&&&
+Mutux:
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+type SafeCounter struct {
+	mu    sync.Mutex
+	value int
+}
+
+func (c *SafeCounter) Increment() {
+	c.mu.Lock()         // Take the key
+	defer c.mu.Unlock() // Ensure key is returned even if function crashes
+	c.value++
+}
+
+func (c *SafeCounter) Value() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.value
+}
+
+func main() {
+	counter := SafeCounter{}
+	var wg sync.WaitGroup
+
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			counter.Increment()
+		}()
+	}
+
+	wg.Wait()
+	fmt.Println("Final Count:", counter.Value()) // Guaranteed to be 1000
+}
+&&&&&&&&&&&&&&&&&&
+
+ sync.RWMutex (Reader-Writer Mutex)
+
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type SessionStore struct {
+	mu       sync.RWMutex
+	sessions map[string]string
+}
+
+// Get retrieves a value. Multiple goroutines can run this at once.
+func (s *SessionStore) Get(key string) (string, bool) {
+	s.mu.RLock() // Read Lock: Shared access
+	defer s.mu.RUnlock()
+
+	fmt.Printf("Reading key: %s\n", key)
+	val, ok := s.sessions[key]
+	return val, ok
+}
+
+// Set updates a value. This blocks ALL readers and other writers.
+func (s *SessionStore) Set(key, value string) {
+	s.mu.Lock() // Write Lock: Exclusive access
+	defer s.mu.Unlock()
+
+	fmt.Printf("!!! Writing key: %s !!!\n", key)
+	s.sessions[key] = value
+}
+
+func main() {
+	store := SessionStore{
+		sessions: make(map[string]string),
+	}
+	var wg sync.WaitGroup
+
+	// 1. Start 10 "Reader" goroutines
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 2; j++ {
+				store.Get("user_1")
+				time.Sleep(time.Millisecond * 10)
+			}
+		}(i)
+	}
+
+	// 2. Start 1 "Writer" goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(time.Millisecond * 15) // Wait a bit so readers start first
+		store.Set("user_1", "active_session_123")
+	}()
+
+	wg.Wait()
+	fmt.Println("All operations complete.")
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+sync.once package:
+
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+type Database struct {
+	connection string
+}
+
+var (
+	db   *Database
+	once sync.Once
+)
+
+// GetInstance ensures the DB is only created once
+func GetInstance() *Database {
+	once.Do(func() {
+		fmt.Println("--- Heavy Operation: Opening Database Connection ---")
+		db = &Database{connection: "Connected to MySQL"}
+	})
+	return db
+}
+
+func main() {
+	var wg sync.WaitGroup
+
+	// Simulate 100 concurrent requests for the DB instance
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			// Every worker calls this, but only the first one triggers the init
+			conn := GetInstance()
+			_ = conn // Use the connection
+		}(i)
+	}
+
+	wg.Wait()
+	fmt.Println("All workers finished. DB was initialized only once.")
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+WorkerPool:
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+// 1. The Worker Function
+func worker(id int, jobs <-chan int, results chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done() // Signal to main when this worker is finally finished
+
+	for j := range jobs {
+		fmt.Printf("Worker %d: started job %d\n", id, j)
+		time.Sleep(time.Millisecond * 500) // Simulate a heavy task (e.g., API call)
+		fmt.Printf("Worker %d: finished job %d\n", id, j)
+		results <- j * 2 // Send the result back
+	}
+}
+
+func main() {
+	const numJobs = 10
+	const numWorkers = 3
+
+	jobs := make(chan int, numJobs)
+	results := make(chan int, numJobs)
+	var wg sync.WaitGroup
+
+	// 2. Start the Workers
+	for w := 1; w <= numWorkers; w++ {
+		wg.Add(1)
+		go worker(w, jobs, results, &wg)
+	}
+
+	// 3. Send Jobs
+	for j := 1; j <= numJobs; j++ {
+		jobs <- j
+	}
+	close(jobs) // CRITICAL: Tells workers no more jobs are coming
+
+	// 4. Collect Results (in a separate goroutine so we don't block)
+	go func() {
+		wg.Wait()      // Wait for all workers to finish
+		close(results) // Close results once all workers are done
+	}()
+
+	// Print the results as they come in
+	for res := range results {
+		fmt.Println("Result received:", res)
+	}
+
+	fmt.Println("All work completed.")
+}
+
+&&&&&&&&&&&&&
+Building a Concurrent Web Scraper is the perfect way to see all these concepts (Goroutines, Channels, WaitGroups, and Worker Pools) working together in a real-world scenario.
+
+In this project, we will:
+
+Jobs: A list of URLs to fetch.
+
+Workers: A fixed number of goroutines that perform the HTTP GET request.
+
+Results: A channel to collect the status codes or errors.
+
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"sync"
+	"time"
+)
+
+// Result represents the outcome of a single URL fetch
+type Result struct {
+	URL        string
+	StatusCode int
+	Error      error
+}
+
+// worker fetches URLs from the jobs channel and sends results to the results channel
+func worker(id int, jobs <-chan string, results chan<- Result, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for url := range jobs {
+		fmt.Printf("Worker %d: Fetching %s\n", id, url)
+
+		// Set a timeout for the HTTP request so workers don't hang
+		client := http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get(url)
+
+		if err != nil {
+			results <- Result{URL: url, Error: err}
+			continue
+		}
+
+		results <- Result{URL: url, StatusCode: resp.StatusCode}
+		resp.Body.Close()
+	}
+}
+
+func main() {
+	urls := []string{
+		"https://google.com",
+		"https://github.com",
+		"https://golang.org",
+		"https://httpbin.org/delay/2",     // This one is slow
+		"https://nonexistent-website.abc", // This one will fail
+	}
+
+	numWorkers := 3
+	jobs := make(chan string, len(urls))
+	results := make(chan Result, len(urls))
+	var wg sync.WaitGroup
+
+	// 1. Start the Worker Pool
+	for w := 1; w <= numWorkers; w++ {
+		wg.Add(1)
+		go worker(w, jobs, results, &wg)
+	}
+
+	// 2. Feed the jobs into the channel
+	for _, url := range urls {
+		jobs <- url
+	}
+	close(jobs) // No more URLs will be added
+
+	// 3. Start a monitor goroutine to close results when work is done
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// 4. Collect and display results
+	fmt.Println("--- Scraping Results ---")
+	for res := range results {
+		if res.Error != nil {
+			fmt.Printf("FAIL: %s | Error: %v\n", res.URL, res.Error)
+		} else {
+			fmt.Printf("SUCCESS: %s | Status: %d\n", res.URL, res.StatusCode)
+		}
+	}
+}
+

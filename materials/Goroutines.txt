@@ -1,0 +1,198 @@
+Goroutines
+A goroutine is a lightweight thread managed by the Go runtime.
+
+Example:
+
+go
+
+package main
+import (
+    "fmt"
+    "time"
+)
+func printMessage(msg string) {
+    for i := 0; i < 3; i++ {
+        fmt.Println(msg, i)
+        time.Sleep(time.Millisecond * 500)
+    }
+}
+func main() {
+    go printMessage("Goroutine") // runs concurrently
+    printMessage("Main")        // runs in main goroutine
+}
+🔹 go keyword starts a new goroutine.
+🔹 The main goroutine ends the program when it finishes — even if others are still running.
+
+4. Channels
+Channels let goroutines communicate safely.
+
+Example:
+
+go
+
+
+package main
+import "fmt"
+func main() {
+    ch := make(chan string)
+    go func() {
+        ch <- "ping" // send value
+    }()
+    msg := <-ch // receive value
+    fmt.Println(msg)
+}
+Think of a channel as a pipe connecting concurrent tasks.
+
+5. Buffered Channels
+Channels can be buffered to hold multiple values.
+
+go
+
+
+ch := make(chan int, 2)
+ch <- 1
+ch <- 2
+fmt.Println(<-ch)
+fmt.Println(<-ch)
+
+6. Select Statement
+select lets you wait on multiple channel operations.
+select {
+case msg1 := <-ch1:
+    fmt.Println("received", msg1)
+case msg2 := <-ch2:
+    fmt.Println("received", msg2)
+default:
+    fmt.Println("no message received")
+}
+
+7. WaitGroup and sync Package
+Use a WaitGroup to wait for multiple goroutines to finish.
+
+go
+
+
+var wg sync.WaitGroup
+wg.Add(3)
+for i := 1; i <= 3; i++ {
+    go func(id int) {
+        defer wg.Done()
+        fmt.Println("Worker", id)
+    }(i)
+}
+wg.Wait()
+
+8. Context for Cancellation and Timeouts
+Use context to manage lifecycle of goroutines (important in production code).
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+    defer cancel()
+    select {
+    case <-time.After(2 * time.Second):
+        fmt.Println("done")
+    case <-ctx.Done():
+        fmt.Println("timeout:", ctx.Err())
+    }
+}
+9. Advanced Concurrency Topics
+Once comfortable, explore:
+
+sync.Mutex and sync.RWMutex
+sync.Once
+Worker pools
+Pipelines
+Fan-out / fan-in patterns
+Deadlocks and best practices
+
+
+10. Practice Projects
+
+Try small concurrency-based projects:
+Web scraper using goroutines and channels
+Concurrent file downloader
+Chat server
+Worker pool to process tasks
+
+&&&&&&&&&&&&
+
+Mutex:
+While Channels are for communication (passing data between tasks), a Mutex (short for Mutual Exclusion) is for protection. It ensures that only one goroutine can access a specific piece of data at a time.
+
+If two goroutines try to increment the same integer at the exact same microsecond, you get a Race Condition, and your data becomes corrupted.
+
+1. The Problem: Data Races
+Without a Mutex, this code is "broken" because multiple goroutines collide while trying to update count.
+
+// BAD CODE: DON'T DO THIS
+var count int
+var wg sync.WaitGroup
+
+for i := 0; i < 1000; i++ {
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        count++ // Multiple goroutines hitting this at once will lose counts
+    }()
+}
+wg.Wait()
+fmt.Println(count) // Often prints something less than 1000
+
+2. The Solution: sync.Mutex
+A Mutex acts like a bathroom key.
+
+To use the data, you must Lock() the Mutex (take the key).
+
+If someone else has the key, you must wait in line.
+
+When done, you Unlock() (return the key).
+
+&&&&&&&&&
+Advanced: sync.RWMutex (Reader-Writer Mutex)
+In many apps, you have many people reading data and only one person writing to it. A standard Mutex is slow here because it blocks readers from each other.
+
+An RWMutex allows unlimited simultaneous readers, but if someone wants to write, it blocks everyone else until the write is done.
+
+Use Case: High-Read, Low-Write Cache
+Imagine a configuration map or a session store. 99% of the time, your app is just looking up values (Reading). Only 1% of the time is it updating them (Writing). Using a standard Mutex would make readers wait for each other unnecessarily.
+
+Use a Mutex when...								,	Use a Channel when...
+..........................................................................................................................................................................
+"You are protecting a Shared State (Cache, Counter, Map).",	You are passing Ownership of data.
+High-performance internal state management.,				 Orchestrating a workflow or pipeline.
+"You just need to ""lock"" a variable for a nanosecond."		,You need to signal completion or time out.
+
+...............................
+
+sync.Once:
+...................
+Think of sync.Once as a "one-way gate." It is an object that ensures a specific piece of code runs exactly once, no matter how many thousands of goroutines try to call it at the same time.
+
+It is most commonly used for Lazy Initialization—setting up something expensive (like a database connection or loading a configuration file) only when it's actually needed, rather than at app startup.
+
+1. The Problem: The "Double Init" Race
+Without sync.Once, if ten goroutines check if a connection is nil at the same microsecond, they might all see nil and attempt to open ten separate database connections.
+
+2. The Solution: sync.Once
+sync.Once has only one method: Do(f func()).
+The first goroutine to call Do will execute the function.
+All other goroutines that call Do while the first one is still running will block (wait) until the first one finishes.
+
+After the first one finishes, all future calls to Do will return immediately without running the function again.
+
+3. Full Code Example: Database Singleton
+In this example, even though we have 100 workers asking for a database connection, the "Connecting..." logic only prints once.
+
+&&&&&&&&&&&&&&
+A Worker Pool is one of the most important patterns in Go. It allows you to manage a queue of tasks using a fixed number of goroutines.
+
+Instead of spawning 10,000 goroutines (which could overwhelm your CPU or memory), you spawn, say, 5 "workers" that sit in a loop, picking up jobs until the queue is empty.
+
+The Core Architecture
+A worker pool relies on three components:
+
+Jobs Channel: Where the main program sends tasks.
+
+Results Channel: Where workers send their finished output.
+
+The Workers: A set of goroutines running a for range loop on the jobs channel.
