@@ -1,0 +1,400 @@
+How to start the web server?
+
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func main() {
+	//start the webserver
+	fmt.Println("Server is running on port 8080")
+	http.ListenAndServe(":8080", nil)
+}
+
+G:\HCL\2026\march\httpapp>go run main.go
+Server is running on port 8080
+
+browser/any http client:
+http://localhost:8080/
+
+404 page not found.
+
+Routers: handlers:
+...............................
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+//func HomePagehandler(response http.ResponseWriter, request *http.Request) {
+//	//response.Write([]byte("Welcome to the HomePage!"))
+//	//fmt.Fprintf(response, "<h1>Hello World</h1>")
+//	fmt.Fprintln(response, "Welcome to the HomePage!")
+//}
+
+func main() {
+	//router/ application logic
+	//http.HandleFunc("/", HomePagehandler)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hello World")
+	})
+	//start the webserver
+	fmt.Println("Server is running on port 8080")
+	http.ListenAndServe(":8080", nil)
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+More routers:
+/hello
+/hai
+/ -home
+
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func main() {
+	//router/ application logic
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Home Page")
+	})
+	http.HandleFunc("/hai", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hai")
+	})
+	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hello")
+	})
+	//start the webserver
+	fmt.Println("Server is running on port 8080")
+	http.ListenAndServe(":8080", nil)
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Router with http methods
+ -get,post,put,delete
+
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+// user resource
+func UserHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		fmt.Fprintln(w, "Users Get")
+	case http.MethodPost:
+		fmt.Fprintln(w, "Users Post")
+	case http.MethodPut:
+		fmt.Fprintln(w, "Users Put")
+	case http.MethodDelete:
+		fmt.Fprintln(w, "Users Delete")
+	}
+}
+
+// customer resource
+func CustomerHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		fmt.Fprintln(w, "Customer Get")
+	case http.MethodPost:
+		fmt.Fprintln(w, "Customer Post")
+	case http.MethodPut:
+		fmt.Fprintln(w, "Customer Put")
+	case http.MethodDelete:
+		fmt.Fprintln(w, "Customer Delete")
+	}
+}
+
+// product resources
+func ProductHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		fmt.Fprintln(w, "Product Get")
+	case http.MethodPost:
+		fmt.Fprintln(w, "Product Post")
+	case http.MethodPut:
+		fmt.Fprintln(w, "Product Put")
+	case http.MethodDelete:
+		fmt.Fprintln(w, "Product Delete")
+	}
+}
+func main() {
+	//start the webserver
+	http.HandleFunc("/user/", UserHandler)
+	http.HandleFunc("/customer/", CustomerHandler)
+	http.HandleFunc("/product/", ProductHandler)
+	fmt.Println("Server is running on port 8080")
+	http.ListenAndServe(":8080", nil)
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+JSON request and response Payload:
+.................................................................
+
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+type User struct {
+	Name string "json:'name'"
+	Age  int    "json:'age'"
+}
+
+func main() {
+	http.HandleFunc("/user", func(w http.ResponseWriter, r *http.Request) {
+		//read and write of json
+		var user User
+		err := json.NewDecoder(r.Body).Decode(&user)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		//response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(user)
+	})
+	http.ListenAndServe(":8080", nil)
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Parameters: Path Parameter ,Query Parameter
+
+Path Parameter
+/users/1
+/products/1
+/customers/1
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func main() {
+
+	//old way of reading path parameters
+	//http.HandleFunc("/user/", func(w http.ResponseWriter, r *http.Request) {
+	//	///the prefix we are looking for
+	//	prefix := "/user/"
+	//	//ensure the path acutally starts with prefix
+	//	if len(r.URL.Path) <= len(prefix) {
+	//		http.Error(w, "User Id is Required (e.g.,/user/123", http.StatusBadRequest)
+	//	}
+	//	//slicing the string from the end of "/user/
+	//	id := r.URL.Path[len(prefix):]
+	//	id = strings.Split(id, "/")[0]
+	//	fmt.Fprintln(w, "Customer:", id)
+	//})
+
+	//lastest way of reading path params go version 1.22+
+	http.HandleFunc("GET /user/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		fmt.Fprintln(w, "Customer:", id)
+	})
+	fmt.Println("Server has started....")
+	http.ListenAndServe(":8080", nil)
+}
+
+Query Parameters:
+..................................
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func main() {
+
+	http.HandleFunc("/greet", func(w http.ResponseWriter, r *http.Request) {
+		queryParams := r.URL.Query()
+		name := queryParams.Get("name")
+		if name == "" {
+			name = "guest"
+		}
+		fmt.Fprintln(w, "Hello,", name)
+
+	})
+	fmt.Println("Server has started....")
+	http.ListenAndServe(":8080", nil)
+}
+
+Testing:
+localhost:8080/greet?name=Subramanian
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+Middlewares:
+ functions gets executed before and after request and response proceed 
+For pre processing
+
+Middlewares are hof functions..
+
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+)
+
+// middleware
+func loggingMiddleware(next http.Handler) http.Handler {
+	//hof
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		//Logic Before the handler
+		fmt.Printf("Started %s %s %s\n", r.RemoteAddr, r.Method, r.URL.Path)
+		//call "the next hanlder in the chain"
+		next.ServeHTTP(w, r)
+		//logic after the handler
+		w.Header().Add("companyName", "HCL Technologies")
+		fmt.Fprintf(w, "Completed in %s", time.Since(start))
+	})
+}
+
+func main() {
+	//create mutex version of server
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		//logic
+		fmt.Fprintln(w, "Hello,Subramanian")
+	})
+	//wrap the mux with middlware
+	wrappedMux := loggingMiddleware(mux)
+	fmt.Println("Server has started....")
+	err := http.ListenAndServe(":8080", wrappedMux)
+	if err != nil {
+		fmt.Printf("Error starting server: %s\n", err)
+	}
+
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+Middleware chains:
+.....................................
+Chaining middleware allows to build a processing pipeline where each layer handles specific concern (like logging, security,data compression)
+
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"time"
+)
+
+// middleware
+func LogginMiddleware(next http.Handler) http.Handler {
+	//hof
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		//Logic Before the handler
+		fmt.Printf("Started %s %s %s\n", r.RemoteAddr, r.Method, r.URL.Path)
+		//call "the next hanlder in the chain"
+		w.Header().Add("companyName", "HCL Technologies")
+		next.ServeHTTP(w, r)
+		//logic after the handler
+		fmt.Fprintf(w, "Completed in %s", time.Since(start))
+	})
+}
+
+// AuthMiddleware Auth middlware : checks for a specific header
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("X-Auth-Token")
+		if token != "secret-pass" {
+			fmt.Println("[Auth] Unauthorized Attempt")
+			http.Error(w, "Forbidden: Invalid Token", http.StatusForbidden)
+			return // stop the chain here
+		}
+		fmt.Println("[Auth] User Authenticated")
+		next.ServeHTTP(w, r)
+
+	})
+}
+
+func main() {
+	//create mutex version of server
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		//logic
+		fmt.Fprintln(w, "Hello,Subramanian")
+	})
+	//wrap the mux with middlware
+	//order-->Request--->Logging--->Auth--Mux--Handler
+	//middleware chain a(b(c(d(e(mux)))))
+	wrappedHandler := LogginMiddleware(AuthMiddleware(mux))
+	fmt.Println("Server has started....")
+	err := http.ListenAndServe(":8080", wrappedHandler)
+	if err != nil {
+		fmt.Printf("Error starting server: %s\n", err)
+	}
+
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&	
+
+More server Configuration:
+package main
+
+import "net/http"
+
+func main() {
+	//start the webserver
+	server := http.Server{
+		Addr: ":8080",
+		
+		Handler: nil,
+	}
+	//http.ListenAndServe(":8080", nil)
+	server.ListenAndServe()
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+HTTP Clients:
+.......................
+
+package main
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+)
+
+func GetPosts() {
+	url := "https://jsonplaceholder.typicode.com/posts"
+	res, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	fmt.Println(string(body))
+}
+func main() {
+	GetPosts()
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+
+
+
+
+
+
+
+
+
+
+
+

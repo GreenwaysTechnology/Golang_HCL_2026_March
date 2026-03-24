@@ -304,6 +304,493 @@ func main() {
 	fmt.Println(<-ch)
 	//fmt.Println(<-ch)
 }
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+select vs wait group:
+
+WaitGroup:
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+func processImage(id int, wg *sync.WaitGroup) {
+	// Schedule the call to Done to ensure the counter decrements
+	// even if the function panics.
+	defer wg.Done()
+
+	fmt.Printf("Image %d: Starting resize...\n", id)
+	time.Sleep(time.Millisecond * 800) // Simulate processing time
+	fmt.Printf("Image %d: Finished!\n", id)
+}
+
+func main() {
+	var wg sync.WaitGroup
+	imagesToProcess := 5
+
+	for i := 1; i <= imagesToProcess; i++ {
+		wg.Add(1) // Tell the counter we are starting 1 task
+		go processImage(i, &wg)
+	}
+
+	fmt.Println("Main: Waiting for all images to finish...")
+	wg.Wait() // This blocks until the counter hits 0
+	fmt.Println("Main: All images processed. Ready to upload!")
+}
+
+Select:
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	//create two channels
+	ch1 := make(chan int)
+	ch2 := make(chan error)
+	//first go routine which sends number
+	go func() {
+		time.Sleep(20 * time.Second)
+		ch1 <- 42
+	}()
+	go func() {
+		time.Sleep(10 * time.Second)
+		ch2 <- fmt.Errorf("Something bad happened")
+	}()
+	fmt.Println("Waiting for results and error")
+	//select statement which waits for int and error channel who comes first that result
+	//will be returned
+	select {
+	case value := <-ch1:
+		fmt.Println("Results received", value)
+	case err := <-ch2:
+		fmt.Println("Error received", err)
+	case <-time.After(time.Second * 5):
+		fmt.Println("Timed out")
+	}
+}
+
+select vs WaitGroup
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+func processImage(id int, wg *sync.WaitGroup) {
+	// Schedule the call to Done to ensure the counter decrements
+	// even if the function panics.
+	defer wg.Done()
+
+	fmt.Printf("Image %d: Starting resize...\n", id)
+	time.Sleep(time.Millisecond * 800) // Simulate processing time
+	fmt.Printf("Image %d: Finished!\n", id)
+}
+
+func main() {
+	var wg sync.WaitGroup
+	imagesToProcess := 5
+
+	for i := 1; i <= imagesToProcess; i++ {
+		wg.Add(1) // Tell the counter we are starting 1 task
+		go processImage(i, &wg)
+	}
+
+	fmt.Println("Main: Waiting for all images to finish...")
+	wg.Wait() // This blocks until the counter hits 0
+	fmt.Println("Main: All images processed. Ready to upload!")
+}
+
+Mutux:
+  for safe counters
+
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+// object which holds data
+type SafeCounter struct {
+	mu    sync.Mutex
+	count int //data to be protected from multiple go routines access
+}
+
+// function to return counter
+func (sc *SafeCounter) Value() int {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return sc.count
+}
+
+// function to increment counter
+func (sc *SafeCounter) Inc() {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sc.count++
+}
+func worker(wg *sync.WaitGroup, counter *SafeCounter) {
+	defer wg.Done()
+	counter.Inc()
+}
+func main() {
+	//create SafeCounter
+	counter := SafeCounter{
+		count: 0,
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go worker(&wg, &counter)
+	}
+	wg.Wait()
+	fmt.Printf("%d\n", counter.Value())
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+Mutex vs Atomic:
+...........................
+Mutex:
+ Only one goroutine can enter critical section
+ others will wait (block)
+
+Think like ; "Room with one Key"
+
+Where:
+ Complex operations
+Multiple variables
+Critcal sections
+
+Atomic:
+  -> Uses cpl level instructions
+ -> no locking
+ -> very fast
+Internally it uses cpu instruction set (no waiting)
+
+When:
+   simple operations
+  counter
+  boolean based applications
+High performance requirement 
+
+it works based on int64 or int32 -not int
+
+package main
+
+import (
+	"fmt"
+	"sync"
+	"sync/atomic"
+)
+
+var counter int32
+
+func increment(wg *sync.WaitGroup) {
+	defer wg.Done()
+	fmt.Println("Incrementing....")
+	atomic.AddInt32(&counter, 1) //atomic operation
+}
+func main() {
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go increment(&wg)
+	}
+	wg.Wait()
+	fmt.Printf("Value %d: Finished!\n", counter)
+}
+**********************************************************************************************************************************************************
+RWMutex:
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type Cache struct {
+	mu   sync.RWMutex
+	data map[string]int
+}
+
+// read
+func (c *Cache) Get(key string) (int, bool) {
+	c.mu.RLock() // Multiple readers OK
+	defer c.mu.RUnlock()
+	val, ok := c.data[key]
+	return val, ok
+}
+
+// write
+func (c *Cache) Set(key string, val int) {
+	c.mu.Lock() // Exclusive writer
+	defer c.mu.Unlock()
+	c.data[key] = val
+}
+
+func main() {
+	cache := &Cache{data: make(map[string]int)}
+	// Simulate read-heavy workload (90% reads)
+	var wg sync.WaitGroup
+	// 90 reader goroutines
+	for i := 0; i < 90; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 1000; j++ {
+				cache.Get("key") // Fast - multiple readers
+			}
+		}(i)
+	}
+	// 10 writer goroutines (rare)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			time.Sleep(10 * time.Millisecond) // Simulate slow writes
+			cache.Set("key", id)
+		}(i)
+	}
+	start := time.Now()
+	wg.Wait()
+	fmt.Printf("RWMutex: %d readers + %d writers took %v\n", 90, 10, time.Since(start))
+
+}
+&&&&&&&&&&&&&&&&
+
+
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type Cache struct {
+	mu   sync.RWMutex
+	data map[string]int
+}
+
+// read
+func (c *Cache) Get(key string) (int, bool) {
+	c.mu.RLock() // Multiple readers OK
+	defer c.mu.RUnlock()
+	val, ok := c.data[key]
+	return val, ok
+}
+
+// write
+func (c *Cache) Set(key string, val int) {
+	c.mu.Lock() // Exclusive writer
+	defer c.mu.Unlock()
+	c.data[key] = val
+}
+
+func main() {
+	cache := &Cache{data: make(map[string]int)}
+	// Simulate read-heavy workload (90% reads)
+	var wg sync.WaitGroup
+	// 90 reader goroutines
+	for i := 0; i < 90; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 1000; j++ {
+				cache.Get("key") // Fast - multiple readers
+			}
+		}(i)
+	}
+	// 10 writer goroutines (rare)
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			time.Sleep(10 * time.Millisecond) // Simulate slow writes
+			cache.Set("key", id)
+		}(i)
+	}
+	start := time.Now()
+	wg.Wait()
+	fmt.Printf("RWMutex: %d readers + %d writers took %v\n", 90, 10, time.Since(start))
+
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Pipeline:
+package main
+
+import "fmt"
+
+//the output of one function will be input to another function
+// output is chan , input is chan
+
+// produces series of values - outbound channel
+func gen(nums ...int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for _, n := range nums {
+			out <- n
+		}
+		close(out)
+	}()
+	return out
+}
+func sq(in <-chan int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for n := range in {
+			//find squre root of n and write into a channel
+			out <- n * n
+		}
+		close(out)
+	}()
+	return out
+}
+
+func main() {
+	// Set up the pipeline.
+	//c := gen(2, 3, 4, 5, 6, 10)
+	//out := sq(c)
+	////fmt.Println(<-out) // 4
+	////fmt.Println(<-out) // 9
+	//for value := range out {
+	//	fmt.Println("value:", value)
+	//}
+	//short cut
+	for n := range sq(gen(2, 3, 5, 6, 9, 10)) {
+		fmt.Println(n) // 16 then 81
+	}
+
+}
+
+Fanout:
+package main
+
+import "fmt"
+
+func gen_1(nums ...int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for _, n := range nums {
+			out <- n
+		}
+		close(out)
+	}()
+	return out
+}
+func sq_1(in <-chan int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for n := range in {
+			//find squre root of n and write into a channel
+			out <- n * n
+		}
+		close(out)
+	}()
+	return out
+}
+func main() {
+	//Fan out pattern: same channel input is distributed to multiple channel
+	in := gen_1(2, 3)
+	// FAN-OUT (2 workers)
+	c1 := sq_1(in)
+	c2 := sq_1(in)
+	// Consume each separately
+	for n1 := range c1 {
+		fmt.Println("c1:", n1)
+	}
+	for n := range c2 {
+		fmt.Println("c2:", n)
+	}
+
+}
+
+FanIn:
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func gen_3(nums ...int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for _, n := range nums {
+			out <- n
+		}
+		close(out)
+	}()
+	return out
+}
+func sq_3(in <-chan int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for n := range in {
+			out <- n * n
+		}
+		close(out)
+	}()
+	return out
+}
+
+// FAN-IN: merge channels
+func merge(cs ...<-chan int) <-chan int {
+	var wg sync.WaitGroup
+	out := make(chan int)
+
+	wg.Add(len(cs))
+
+	for _, c := range cs {
+		go func(ch <-chan int) {
+			defer wg.Done()
+			for n := range ch {
+				out <- n
+			}
+		}(c)
+	}
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+
+	return out
+}
+
+func main() {
+	in := gen_3(2, 3, 4, 5)
+
+	// FAN-OUT
+	c1 := sq_3(in)
+	c2 := sq_3(in)
+
+	// FAN-IN
+	out := merge(c1, c2)
+
+	// Single consumer
+	for n := range out {
+		fmt.Println("merged:", n)
+	}
+
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+
+
+
+
+
+
+
 
 
 
