@@ -1,0 +1,152 @@
+										Gin Web Framework
+
+
+Gin framework is written on the top of http router/core httpmodule
+
+Features
+1.fast
+2.in built middleware support
+3.crash-free - can catch any panic and recover during http request.
+4.json validation - gin can parse and validate json of request 
+5.routes grouping - organize the routers better way
+6.error management - errors can be handled during request cycles , you can errors into log files,or database 
+7.Rendering built in - you can render json,xml, html rendering
+
+Install gin framework:
+
+go get -u github.com/gin-gonic/gin
+
+First helloworld middleware supported gin engine,simple router:
+package main
+
+import (
+	"fmt"
+
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	//initalize the gin Engine with middleware support
+	router := gin.Default()
+	//router with home page
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "hello world",
+		})
+	})
+
+	//router.Run(":8080")
+	//default port is 8080
+	fmt.Println("Gin Server Started...")
+	router.Run()
+
+}
+.........................................
+Without middleware integration:
+package main
+
+import (
+	"fmt"
+
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	//initialize the gin Engine without middleware support
+	router := gin.New() //router with home page
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "hello world",
+		})
+	})
+
+	//router.Run(":8080")
+	//default port is 8080
+	fmt.Println("Gin Server Started...")
+	router.Run()
+
+}
+curd operations -Path params:
+............................
+package main
+
+import (
+	"fmt"
+
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	//initalize the gin Engine with middleware support
+	router := gin.Default()
+	//router with home page
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Home",
+		})
+	})
+	router.GET("/users", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Users GET",
+		})
+	})
+	router.GET("/users/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		c.JSON(200, gin.H{
+			"message": "Users GET By Param" + id,
+		})
+	})
+	router.POST("/users", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Users POST",
+		})
+	})
+	router.PUT("/users/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		c.JSON(200, gin.H{
+			"message": "Users PUT By Param" + id,
+		})
+	})
+	router.DELETE("/users/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		c.JSON(200, gin.H{
+			"message": "Users DELETE By Param" + id,
+		})
+	})
+
+	fmt.Println("Gin Server Started...")
+	router.Run()
+}
+
+Query Params:
+.........................
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	router := gin.Default()
+	router.GET("/welcome", func(c *gin.Context) {
+		name := c.DefaultQuery("firstname", "Guest")
+		c.String(http.StatusOK, "Hello %s", name)
+	})
+	fmt.Println("Server is running on port 8080")
+	router.Run(":8080")
+}
+Task:
+You have to rewrite the employee app with gin framwork
+
+
+
+
+
+
+
+
+
+
