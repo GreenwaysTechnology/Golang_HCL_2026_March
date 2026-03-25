@@ -1,0 +1,226 @@
+											Database programming, Context
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Basic database programming:
+..................................................
+
+1.install postgre database .
+
+  I am going to use docker
+
+setup postgres database
+
+>Project root dir
+>docker-compose.yml
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin-ui
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+G:\HCL\2026\march\postgresapp>dir
+ Volume in drive G is Training
+ Volume Serial Number is 0EBA-602D
+
+ Directory of G:\HCL\2026\march\postgresapp
+
+03/25/2026  12:05 PM    <DIR>          .
+03/25/2026  12:04 PM    <DIR>          ..
+03/25/2026  12:04 PM    <DIR>          .idea
+03/25/2026  12:05 PM               737 docker-compose.yml
+03/25/2026  12:04 PM                28 go.mod
+               2 File(s)            765 bytes
+               3 Dir(s)  161,106,882,560 bytes free
+
+G:\HCL\2026\march\postgresapp>docker-compose up
+
+Connect PostgresSQL inside pgAdmin
+
+http://localhost:5050/browser/
+
+user name:admin@admin.com
+password:admin123
+refer: docker-compose.yml file under pgAdmin
+
+after you have to create configuration:
+
+Name : local posgre
+Connection
+ hostname/address :postgres
+ username: admin
+password: secret
+
+we have to create table inside database
+
+CREATE Table users(
+ id SERIAL PRIMARY KEY,
+ name TEXT,
+ email TEXT
+)
+ 
+Code :
+ Connectting to db
+
+dependencies:
+ go get  "GitHub.com/jackc/pgx/v5/pgxpool"
+ go get githbub.com/jackc/pgx/v5
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Context:
+  In the go lang , the context package is for managing the life cycle of requests.
+  suppose there is long running operations are going on, how to stop what you are doing.
+  you have requested something from web browser from the server, you might have closed your UI app, browser or mobile
+
+ Thats where context api will come into picture.
+ 
+Think of Context as a signal that travel down your call stack,carrying deadlines,cancellation signals, and request-scoped values.
+
+Why use it?
+  when we start multiple go routines to handle tasks , without context , if the main process fails or the user cancels, those go routines might keep running forever  - goroutine leaks
+
+Core context package functions
+
+1.context.Background
+	This root context, use this in main or at start of the top level request
+
+2.context.withCancel(parent)
+	returns a copy of the parent and a cancel function to stop the operation manually
+
+3.context.withTimeout(p,d)
+	Automatically cancels after specific duration ( give up after 2 seconds)
+
+4.context.withValue(p,k,v)
+		Used to pass request scoped data like trace id, or user id through the call stack
+
+How context works - The propagation tree
+   when you create a context from the parent, it forms a tree structure, if a parent context is cancelled,
+all children derived from it also cancelled.
+
+The Done() - Channel
+  It returns a channel that closes when the context is cancelled or timeout.
+
+
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// connect to db
+func connectdb() *pgxpool.Pool {
+	//connect string
+	connStr := "postgres://admin:secret@localhost:5432/mydb?sslmode=disable"
+	config, err := pgxpool.ParseConfig(connStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to parse config: %v\n", err)
+		os.Exit(1)
+	}
+	// Set pool limits
+	config.MaxConns = 10
+	config.MaxConnIdleTime = 5 * time.Minute
+	// Create the pool
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	return pool
+
+}
+func createUser(pool *pgxpool.Pool, name string, email string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	query := `INSERT INTO users (name, email) VALUES ($1, $2)`
+	_, err := pool.Exec(ctx, query, name, email)
+	return err
+}
+func getAllUsers(pool *pgxpool.Pool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	query := `SELECT id, name, email FROM users`
+	rows, err := pool.Query(ctx, query)
+	if err != nil {
+		return err
+	}
+	// Crucial: Close rows to release the connection back to the pool
+	defer rows.Close()
+
+	fmt.Println("ID | Name | Email")
+	fmt.Println("-------------------")
+
+	for rows.Next() {
+		var id int
+		var name, email string
+
+		// Scan must match the order of columns in your SELECT statement
+		err := rows.Scan(&id, &name, &email)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("%d | %s | %s\n", id, name, email)
+	}
+
+	// Check if the loop stopped because of an error
+	return rows.Err()
+}
+
+func main() {
+	dbPool := connectdb()
+	//close method is usefull for mememory data
+	defer dbPool.Close()
+	err := createUser(dbPool, "Subramanian", "subu@example.com")
+	if err != nil {
+		fmt.Printf("Create failed: %v\n", err)
+	}
+	err1 := getAllUsers(dbPool)
+	if err1 != nil {
+		fmt.Printf("GetAllUsers failed: %v\n", err1)
+	}
+
+	fmt.Println("Database operations completed successfully!")
+}
+
+
+
+
+
+
+
+
