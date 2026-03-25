@@ -9,8 +9,8 @@ Features
 3.crash-free - can catch any panic and recover during http request.
 4.json validation - gin can parse and validate json of request 
 5.routes grouping - organize the routers better way
-6.error management - errors can be handled during request cycles , you can errors into log files,or database 
-7.Rendering built in - you can render json,xml, html rendering
+6.error management - errors can be handled during request cycles , you can errors into log files, or database 
+7.Rendering built in - you can render json, xml, html rendering
 
 Install gin framework:
 
@@ -140,11 +140,414 @@ func main() {
 }
 Task:
 You have to rewrite the employee app with gin framwork
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+										Binding
+
+In Gin, binding is the process of taking data from http request (like json,form data,or query params) and mapping it into a Go struct.
+
+Gin provides two main family  of binding methods
+1.MustBind
+2.ShouldBind
+ The difference between these methods how they handle errors.
+
+1.MustBind
+   Methods starting with Must (like BindJSON,BindQuery) Will automatically write a "400 bad request" error to the response and set the request state "Aborted" if the validation fails
+
+if data is invalid, gin handles the response for you.
+
+When to use this?
+   when you want to keep your handler code shorter and dont need custom error messages.
+
+2.ShouldBind
+   methods startin with Should (like ShouldBindJSON,ShouldBindQuery) return an error but dont write anyting to response. you are responsible to handle error.
+
+if data is invalid, the function returns error. you decide what to send back to the user...
+
+Whey to use this?
+  when you want to return custom JSON error messages or log specific validation failures.
 
 
 
+eg:
+mustBind:
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+type Login struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+func loginHandler(c *gin.Context) {
+	var body Login
+	//MustBindJson
+	//1.parase the json body into the body struct
+	//if it fails (eg missing fields or invalid json),it sets error message
+	if err := c.BindJSON(&body); err != nil {
+		return
+	}
+	//send response
+	c.JSON(http.StatusOK, gin.H{
+		"code":   200,
+		"status": "success",
+		"data":   body.Username,
+	})
+
+}
+
+func main() {
+	router := gin.Default()
+	router.POST("/login", loginHandler)
+	fmt.Println("Server is running on port 8080")
+	router.Run(":8080")
+}
+
+ShouldBind:
+package main
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+)
+
+//	type Login struct {
+//		Username string `json:"username" binding:"required"`
+//		Password string `json:"password" binding:"required"`
+//	}
+type Login struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required,min=8,max=10"`
+}
+
+func loginHandler(c *gin.Context) {
+	var body Login
+	//MustBindJson
+	//1.parase the json body into the body struct
+	//if it fails (eg missing fields or invalid json),it sets error message
+	if err := c.BindJSON(&body); err != nil {
+		return
+	}
+	//send response
+	c.JSON(http.StatusOK, gin.H{
+		"code":   200,
+		"status": "success",
+		"data":   body.Username,
+	})
+
+}
+func getFrindlyError(fe validator.FieldError) string {
+	switch fe.Tag() {
+	case "required":
+		return "This field is required"
+	case "max":
+		return "The maximum length field must be greater than zero"
+	case "min":
+		return "The minimum length field must be greater than zero"
+	case "email":
+		return "The email address is required"
+	case "alphanum":
+	case "required-space":
+		return "The filed cant be alphanumeric"
+	}
+	return "Invalid value"
+}
+func LoginHandlerWithError(c *gin.Context) {
+	var body Login
+	if err := c.ShouldBind(&body); err != nil {
+		var ve validator.ValidationErrors
+		//Check if the error is actually a validation error
+		if errors.As(err, &ve) {
+			out := make(map[string]string)
+			for _, fe := range ve {
+				//we map the json field name to our friendly error message
+				out[fe.Field()] = getFrindlyError(fe)
+			}
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": out})
+			return
+		}
+		//Handle non validation errors like Malformed json
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json format"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "logged In!"})
+
+}
+
+func main() {
+	router := gin.Default()
+	router.POST("/login", loginHandler)
+	router.POST("/logincustom", LoginHandlerWithError)
+	fmt.Println("Server is running on port 8080")
+	router.Run(":8080")
+}
+
+Custom validation:
+ In gin custom validation is handled by registering a "validator" function with underlying engine.
+lets say "the user name cant be admin" or the date must be in the future.
+There is lib called go-playround/validator lib
+
+"is admin"  "is subu" or is john" is gopher
 
 
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
+)
+
+// define struct
+type UserRequest struct {
+	Username string `json:"username" binding:"required,is-admin"`
+	Age      int    `json:"age" binding:"required,gte=18"`
+}
+// define custom validation logic
+var validateGopher validator.Func = func(fl validator.FieldLevel) bool {
+	//get field value
+	value := fl.Field().String()
+	return strings.Contains(strings.ToLower(value), "admin")
+}
+
+func main() {
+	r := gin.Default()
+	//Register custom validator with Gin engine
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		v.RegisterValidation("is-admin", validateGopher)
+	}
+	r.POST("/register", func(c *gin.Context) {
+		var user UserRequest
+		if err := c.ShouldBindJSON(&user); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed", "details": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Welcome to," + user.Username})
+	})
+
+	fmt.Println("Server started at port 8080")
+	r.Run(":8080")
+}
+
+other binding methods
+context.ShouldBindQuery
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+								Middlwares
+
+Gin has default middleware with you go with 
+  gin.Default
+     -Logger middleware
+     -Recovery middleware - recover from any panic
+without default middleware
+ gin.New()
+
+Attaching middleware with gin.New()
+package main
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.New()
+	//Attach middleware
+	r.Use(gin.Recovery())
+	r.Use(gin.Logger())
+	r.GET("/ping", func(c *gin.Context) {
+		c.String(http.StatusOK, "pong")
+	})
+	r.Run(":8080")
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Types or level of middleware:
+1.Global middleware 
+	Applied to every route in the router, Registered with router.use.
+  Use case: global tasks like logging, and panic recovery 
+2.Group middleware 
+	Applies to all routes within a route group, registered with group.use()
+ Use case: applying authentication or authorization to a subset of routes eg
+ /admin/* - one group
+/public/* - another group
+
+3.Per-route middleware
+ Applied to a single route only.
+Use case: Route specific tasks such as rate limiting or input validation
+
+Execution Order;
+ Middleware functions executes in the order they are registered, "context.Next()",it passes control to the next middleware in the chain
+finally it serves request and response.
+
+   m1----next---m2--next---mN--next- handler
+
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+// route specific middleware - pingpongMiddeware
+func PingPongMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		t := time.Now()
+		c.Next() //very important
+		latency := time.Since(t)
+		log.Printf("PingPong Latency :%s", latency)
+	}
+}
+
+// auth middleware
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.GetHeader("Authorization")
+		fmt.Println(token)
+		if token != "secret-token" {
+			fmt.Println("Auth Middleware Failed")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			c.Abort()
+			return
+		}
+		fmt.Println("Auth Middleware Success")
+		//Continue to the Next handler
+		c.Next()
+	}
+}
+
+func main() {
+	router := gin.New()
+	//Global middlewares
+	router.Use(gin.Recovery())
+	router.Use(gin.Logger())
+	//Route specific middleware
+	//router.method("url","middleare",handler)
+	router.GET("/ping", PingPongMiddleware(), func(c *gin.Context) {
+		c.String(http.StatusOK, "pong")
+	})
+	//group middlware : for set of urls
+	//create group
+	authorized := router.Group("/")
+	//attach middleware for autorized group
+	authorized.Use(AuthMiddleware())
+	{
+		authorized.POST("/login", func(c *gin.Context) {
+			c.String(http.StatusOK, "login")
+		})
+		authorized.POST("/logout", func(c *gin.Context) {
+			c.String(http.StatusOK, "logout")
+		})
+		authorized.POST("/refresh", func(c *gin.Context) {
+			c.String(http.StatusOK, "refresh")
+		})
+		authorized.POST("/refresh-token", func(c *gin.Context) {
+			c.String(http.StatusOK, "refresh-token")
+		})
+		authorized.POST("/register", func(c *gin.Context) {
+			c.String(http.StatusOK, "register")
+		})
+	}
+	router.Run(":8080")
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+									Error Handling Middleware
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+package main
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+func ErrorHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		//Process the request first
+		c.Next()
+		//Check if any errors were added to the context
+		if len(c.Errors) > 0 {
+			err := c.Errors.Last().Err
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+		}
+	}
+}
+func main() {
+	router := gin.Default()
+	//attach error handler global middleware
+	router.Use(ErrorHandler())
+	router.GET("/ok", func(c *gin.Context) {
+		c.String(http.StatusOK, "ok")
+	})
+	router.GET("/error", func(c *gin.Context) {
+		//simulate error
+		c.Error(errors.New("Something went wrong"))
+	})
+	router.Run(":8080")
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+							  Basic Auth middleware
+Gin ships with built in gin.BasicAuth middleware that implements basic http authentication
+it accepts gin.accounts map (map[string]string) username/password
+
+
+package main
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+// secrets: registered user db
+var secrets = gin.H{
+	"foo":  gin.H{"email": "foo@bar.com", "phone": "123456898"},
+	"subu": gin.H{"email": "subu@bar.com", "phone": "565656"},
+	"lena": gin.H{"email": "lena@bar.com", "phone": "3454545"},
+}
+
+func main() {
+	router := gin.Default()
+	authorized := router.Group("/admin", gin.BasicAuth(gin.Accounts{
+		"foo":  "bar",
+		"subu": "1234",
+		"lena": "lena",
+	}))
+	//end points - /admin/secrets
+	authorized.GET("/secrets", func(c *gin.Context) {
+		//get user, it was set by the BasicAuth Middleware
+		user := c.MustGet(gin.AuthUserKey).(string)
+		if secret, ok := secrets[user]; ok {
+			c.JSON(http.StatusOK, gin.H{"user": user, "secret": secret})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"user": user, "secret": "No secret"})
+		}
+	})
+
+	router.Run(":8080")
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
 
 
 
