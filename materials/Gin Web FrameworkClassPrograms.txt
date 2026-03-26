@@ -345,7 +345,7 @@ func main() {
 other binding methods
 context.ShouldBindQuery
 &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-								Middlwares
+								Middlewares
 
 Gin has default middleware with you go with 
   gin.Default

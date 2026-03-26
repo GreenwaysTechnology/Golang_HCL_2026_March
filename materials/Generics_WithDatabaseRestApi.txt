@@ -1,0 +1,655 @@
+package main
+
+import "fmt"
+
+func Sum[T int | float64](a, b T) T {
+	return a + b
+}
+
+func main() {
+	fmt.Println(Sum(1, 2))
+	fmt.Println(Sum(1.90, 2.90))
+}
+
+constraint:
+func Print[T any](v T) T {
+	//fmt.Println(v)
+	return v
+}
+
+func main() {
+	fmt.Println(Print("Hello World"))
+	fmt.Println(Print(23))
+}
+
+Custom Constraint:
+package main
+
+import "fmt"
+
+type Number interface {
+	int | float64
+}
+
+func Add[T Number](a, b T) T {
+	return a + b
+}
+
+func main() {
+	fmt.Println(Add(1, 2))
+	fmt.Println(Add(34.0, 90.8))
+	//Add("test")
+}
+
+comparable constraint:
+package main
+
+import (
+	"fmt"
+)
+
+// Equal uses the 'comparable' constraint to allow == and !=
+func Equal[T comparable](a, b T) bool {
+	return a == b
+}
+
+type User struct {
+	ID   int
+	Name string
+}
+
+func main() {
+	// 1. Comparing Integers
+	fmt.Printf("Integers (5 == 5): %v\n", Equal(5, 5))
+
+	// 2. Comparing Strings
+	fmt.Printf("Strings ('Go' == 'Python'): %v\n", Equal("Go", "Python"))
+
+	// 3. Comparing Structs
+	// Structs are comparable if all their fields are comparable
+	u1 := User{ID: 1, Name: "Alice"}
+	u2 := User{ID: 1, Name: "Alice"}
+	u3 := User{ID: 2, Name: "Bob"}
+
+	fmt.Printf("Structs (u1 == u2): %v\n", Equal(u1, u2))
+	fmt.Printf("Structs (u1 == u3): %v\n", Equal(u1, u3))
+
+	// 4. Using it in a more practical logic: Find in Slice
+	languages := []string{"Go", "Rust", "Swift"}
+	fmt.Printf("Contains 'Rust': %v\n", Contains(languages, "Rust"))
+}
+
+// Contains is a common real-world use case for 'comparable'
+func Contains[T comparable](slice []T, target T) bool {
+	for _, item := range slice {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+Generic Structs
+
+package main
+
+import "fmt"
+
+// Box is a generic container for any type T
+type Box[T any] struct {
+	value T
+}
+
+// Get returns the value stored in the box
+func (b Box[T]) Get() T {
+	return b.value
+}
+
+// Set updates the value in the box (using a pointer receiver)
+func (b *Box[T]) Set(newValue T) {
+	b.value = newValue
+}
+
+type User struct {
+	Name string
+}
+
+func main() {
+	// 1. Box with an Integer
+	intBox := Box[int]{value: 42}
+	fmt.Printf("Int Box: %d\n", intBox.Get())
+
+	// 2. Box with a String
+	strBox := Box[string]{value: "Hello Generics"}
+	fmt.Printf("String Box: %s\n", strBox.Get())
+
+	// 3. Box with a Custom Struct
+	userBox := Box[User]{value: User{Name: "Gopher"}}
+	fmt.Printf("User Box Name: %s\n", userBox.Get().Name)
+
+	// 4. Updating a value using the Set method
+	userBox.Set(User{Name: "Gemini"})
+	fmt.Printf("Updated User Box: %s\n", userBox.Get().Name)
+}
+
+🔹 6. Generic Slices / Data Structures
+package main
+
+import "fmt"
+
+// Stack represents a LIFO data structure for any type T
+type Stack[T any] struct {
+	items []T
+}
+
+// Push adds an element to the top of the stack
+func (s *Stack[T]) Push(item T) {
+	s.items = append(s.items, item)
+}
+
+// Pop removes and returns the top element of the stack.
+// Note: This version will panic if the stack is empty.
+func (s *Stack[T]) Pop() T {
+	if len(s.items) == 0 {
+		var zero T // Returns the zero value of T (e.g., 0, "", or nil)
+		return zero
+	}
+	n := len(s.items)
+	item := s.items[n-1]
+	s.items = s.items[:n-1]
+	return item
+}
+
+// IsEmpty helper method
+func (s *Stack[T]) IsEmpty() bool {
+	return len(s.items) == 0
+}
+
+func main() {
+	// Example 1: A stack of integers
+	intStack := Stack[int]{}
+	intStack.Push(10)
+	intStack.Push(20)
+
+	fmt.Println("Popped from intStack:", intStack.Pop()) // 20
+
+	// Example 2: A stack of strings
+	strStack := Stack[string]{}
+	strStack.Push("World")
+	strStack.Push("Hello")
+
+	for !strStack.IsEmpty() {
+		fmt.Printf("%s ", strStack.Pop()) // Hello World
+	}
+}
+
+Filter example with generics
+package main
+
+import "fmt"
+
+func Filter[T any](items []T, predicate func(T) bool) []T {
+	var result []T
+	for _, item := range items {
+		if predicate(item) {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+func main() {
+	nums := []int{1, 2, 3, 4}
+
+	even := Filter(nums, func(n int) bool {
+		return n%2 == 0
+	})
+
+	fmt.Println(even) // [2 4]
+}
+Multi-Type Generic Function:
+package main
+
+import "fmt"
+
+// PrintPair accepts two different generic types K and V.
+// 'any' is used because Println can handle any type.
+func PrintPair[K any, V any](key K, value V) {
+	fmt.Printf("Key: %v (%T) | Value: %v (%T)\n", key, key, value, value)
+}
+
+type Metadata struct {
+	ID    int
+	Label string
+}
+
+func main() {
+	// 1. Same types (string, string)
+	PrintPair("Language", "Go")
+
+	// 2. Different types (int, string)
+	PrintPair(101, "Status OK")
+
+	// 3. Complex types (string, struct)
+	meta := Metadata{ID: 500, Label: "Server Error"}
+	PrintPair("Error_Log", meta)
+
+	// 4. Explicit type invocation (optional)
+	// Usually, Go infers the types, but you can be explicit:
+	PrintPair[float64, bool](3.14, true)
+}
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+Rest api,database,generics integration:
+Here’s a **production-style Generic REST API using Gin + Go Generics + PostgreSQL (raw SQL)** — clean, reusable, and close to real industry patterns.
+
+depdendency:
+get github.com/gin-gonic/gin
+go get github.com/lib/pq
+---
+
+# 🚀 Architecture
+
+```
+cmd/main.go
+internal/
+ ├── db/
+ ├── model/
+ ├── repository/
+ ├── service/
+ ├── handler/
+ └── middleware/
+```
+
+---
+
+# 🔹 1. Install Dependencies
+
+```bash
+go get github.com/gin-gonic/gin
+go get github.com/lib/pq
+```
+
+---
+
+# 🔹 2. Model
+
+```go
+package model
+
+type Employee struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	City string `json:"city"`
+}
+```
+
+---
+
+# 🔹 3. DB Connection
+
+```go
+package db
+
+import (
+	"database/sql"
+	_ "github.com/lib/pq"
+)
+
+func Connect() (*sql.DB, error) {
+	connStr := "postgres://postgres:password@localhost:5432/testdb?sslmode=disable"
+	return sql.Open("postgres", connStr)
+}
+```
+
+---
+
+# 🔹 4. Generic Repository
+
+```go
+package repository
+
+import "database/sql"
+
+type Repository[T any] interface {
+	GetAll() ([]T, error)
+	GetByID(id int) (T, error)
+	Create(entity T) (T, error)
+	Update(id int, entity T) (T, error)
+	Delete(id int) error
+}
+
+type PostgresRepository[T any] struct {
+	DB *sql.DB
+
+	TableName string
+
+	ScanRow  func(*sql.Row) (T, error)
+	ScanRows func(*sql.Rows) (T, error)
+
+	Insert func(*sql.DB, T) (T, error)
+	UpdateFn func(*sql.DB, int, T) (T, error)
+}
+```
+
+---
+
+# 🔹 5. Generic Repo Implementation
+
+```go
+func (r *PostgresRepository[T]) GetAll() ([]T, error) {
+	rows, err := r.DB.Query("SELECT * FROM " + r.TableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []T
+	for rows.Next() {
+		item, err := r.ScanRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
+func (r *PostgresRepository[T]) GetByID(id int) (T, error) {
+	return r.ScanRow(r.DB.QueryRow("SELECT * FROM "+r.TableName+" WHERE id=$1", id))
+}
+
+func (r *PostgresRepository[T]) Create(entity T) (T, error) {
+	return r.Insert(r.DB, entity)
+}
+
+func (r *PostgresRepository[T]) Update(id int, entity T) (T, error) {
+	return r.UpdateFn(r.DB, id, entity)
+}
+
+func (r *PostgresRepository[T]) Delete(id int) error {
+	_, err := r.DB.Exec("DELETE FROM "+r.TableName+" WHERE id=$1", id)
+	return err
+}
+```
+
+---
+
+# 🔹 6. Employee Repository
+
+```go
+package repository
+
+import (
+	"database/sql"
+	"goapp/internal/model"
+)
+
+func NewEmployeeRepo(db *sql.DB) *PostgresRepository[model.Employee] {
+	return &PostgresRepository[model.Employee]{
+		DB:        db,
+		TableName: "employees",
+
+		ScanRow: func(row *sql.Row) (model.Employee, error) {
+			var e model.Employee
+			err := row.Scan(&e.ID, &e.Name, &e.City)
+			return e, err
+		},
+
+		ScanRows: func(rows *sql.Rows) (model.Employee, error) {
+			var e model.Employee
+			err := rows.Scan(&e.ID, &e.Name, &e.City)
+			return e, err
+		},
+
+		Insert: func(db *sql.DB, e model.Employee) (model.Employee, error) {
+			err := db.QueryRow(
+				"INSERT INTO employees(name, city) VALUES($1,$2) RETURNING id",
+				e.Name, e.City,
+			).Scan(&e.ID)
+			return e, err
+		},
+
+		UpdateFn: func(db *sql.DB, id int, e model.Employee) (model.Employee, error) {
+			_, err := db.Exec(
+				"UPDATE employees SET name=$1, city=$2 WHERE id=$3",
+				e.Name, e.City, id,
+			)
+			e.ID = id
+			return e, err
+		},
+	}
+}
+```
+
+---
+
+# 🔹 7. Generic Service
+
+```go
+package service
+
+import "goapp/internal/repository"
+
+type Service[T any] struct {
+	repo repository.Repository[T]
+}
+
+func NewService[T any](r repository.Repository[T]) *Service[T] {
+	return &Service[T]{repo: r}
+}
+
+func (s *Service[T]) GetAll() ([]T, error) {
+	return s.repo.GetAll()
+}
+
+func (s *Service[T]) GetByID(id int) (T, error) {
+	return s.repo.GetByID(id)
+}
+
+func (s *Service[T]) Create(e T) (T, error) {
+	return s.repo.Create(e)
+}
+
+func (s *Service[T]) Update(id int, e T) (T, error) {
+	return s.repo.Update(id, e)
+}
+
+func (s *Service[T]) Delete(id int) error {
+	return s.repo.Delete(id)
+}
+```
+
+---
+
+# 🔹 8. Generic Gin Handler
+
+```go
+package handler
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+)
+
+type Handler[T any] struct {
+	service interface {
+		GetAll() ([]T, error)
+		GetByID(int) (T, error)
+		Create(T) (T, error)
+		Update(int, T) (T, error)
+		Delete(int) error
+	}
+}
+
+func NewHandler[T any](s interface {
+	GetAll() ([]T, error)
+	GetByID(int) (T, error)
+	Create(T) (T, error)
+	Update(int, T) (T, error)
+	Delete(int) error
+}) *Handler[T] {
+	return &Handler[T]{service: s}
+}
+
+func (h *Handler[T]) RegisterRoutes(r *gin.RouterGroup) {
+	r.GET("/", h.GetAll)
+	r.GET("/:id", h.GetByID)
+	r.POST("/", h.Create)
+	r.PUT("/:id", h.Update)
+	r.DELETE("/:id", h.Delete)
+}
+
+func (h *Handler[T]) GetAll(c *gin.Context) {
+	data, err := h.service.GetAll()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, data)
+}
+
+func (h *Handler[T]) GetByID(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	data, err := h.service.GetByID(id)
+	if err != nil {
+		c.JSON(404, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, data)
+}
+
+func (h *Handler[T]) Create(c *gin.Context) {
+	var input T
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	data, err := h.service.Create(input)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(201, data)
+}
+
+func (h *Handler[T]) Update(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	var input T
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	data, err := h.service.Update(id, input)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, data)
+}
+
+func (h *Handler[T]) Delete(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	err := h.service.Delete(id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"message": "deleted"})
+}
+```
+
+---
+
+# 🔹 9. Middleware (Example Logging)
+
+```go
+package middleware
+
+import (
+	"time"
+
+	"github.com/gin-gonic/gin"
+)
+
+func Logger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		println(c.Request.Method, c.Request.URL.Path, time.Since(start).String())
+	}
+}
+```
+
+---
+
+# 🔹 10. Main (Wiring Everything)
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/gin-gonic/gin"
+	"goapp/internal/db"
+	"goapp/internal/handler"
+	"goapp/internal/repository"
+	"goapp/internal/service"
+)
+
+func main() {
+	dbConn, err := db.Connect()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	r := gin.Default()
+
+	// Middleware
+	r.Use()
+
+	api := r.Group("/api")
+
+	// Employee wiring
+	empRepo := repository.NewEmployeeRepo(dbConn)
+	empService := service.NewService(empRepo)
+	empHandler := handler.NewHandler(empService)
+
+	empHandler.RegisterRoutes(api.Group("/employees"))
+
+	log.Println("Server running on :8080")
+	r.Run(":8080")
+}
+```
+
+---
+
+# 🔥 Final API Endpoints
+
+```
+GET     /api/employees
+GET     /api/employees/:id
+POST    /api/employees
+PUT     /api/employees/:id
+DELETE  /api/employees/:id
+```
+
+---
+
+# 🚀 Why This is Industry-Level
+
+✔ Generic repository (reuse for any entity)
+✔ Clean layered architecture
+✔ No ORM → full SQL control
+✔ Gin for high performance
+✔ Easily extendable
+
+---
+
