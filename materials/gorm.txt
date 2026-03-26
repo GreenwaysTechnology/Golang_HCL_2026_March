@@ -1,0 +1,313 @@
+gorm:
+
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+func ConnectDb() (*gorm.DB, error) {
+	//connStr := "postgres://admin:secret@localhost:5432/mydb?sslmode=disable"
+	dsn := "host=localhost user=admin password=secret dbname=mydb port=5432 sslmode=disable"
+	return gorm.Open(postgres.Open(dsn), &gorm.Config{})
+}
+func main() {
+	// 1. Attempt to connect
+	gormDB, err := ConnectDb()
+	if err != nil {
+		log.Fatalf("Failed to initialize GORM: %v", err)
+	}
+
+	// 2. Get the underlying sql.DB instance to Ping
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		log.Fatalf("Failed to get underlying DB instance: %v", err)
+	}
+
+	// 3. Ping the database
+	err = sqlDB.Ping()
+	if err != nil {
+		log.Fatalf("Database is unreachable: %v", err)
+	}
+
+	fmt.Println("✅ Connection successful! Database is alive and kicking.")
+
+}
+gin , gorm integration:
+go get github.com/gin-gonic/gin
+go get gorm.io/gorm
+go get gorm.io/driver/postgres
+go get github.com/go-playground/validator/v10
+
+
+
+func Connect() (*gorm.DB, error) {
+	dsn := "host=localhost user=postgres password=password dbname=testdb port=5432 sslmode=disable"
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDB, _ := db.DB()
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	return db, nil
+}
+**************\
+Curd:
+package main
+
+import (
+	"log"
+	"strconv"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+func Connect() (*gorm.DB, error) {
+	//	connStr := "postgres://admin:secret@localhost:5432/mydb?sslmode=disable"
+
+	dsn := "host=localhost user=admin password=secret dbname=mydb port=5432 sslmode=disable"
+
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDB, _ := db.DB()
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	return db, nil
+}
+
+//model:
+
+type Employee struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Name      string    `json:"name"`
+	City      string    `json:"city"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type CreateEmployeeRequest struct {
+	Name string `json:"name" validate:"required,min=2"`
+	City string `json:"city" validate:"required"`
+}
+
+type UpdateEmployeeRequest struct {
+	Name string `json:"name"`
+	City string `json:"city"`
+}
+type EmployeeRepository struct {
+	db *gorm.DB
+}
+
+func NewEmployeeRepository(db *gorm.DB) *EmployeeRepository {
+	return &EmployeeRepository{db: db}
+}
+
+func (r *EmployeeRepository) Create(emp *Employee) error {
+	return r.db.Create(emp).Error
+}
+
+func (r *EmployeeRepository) GetByID(id uint) (*Employee, error) {
+	var emp Employee
+	err := r.db.First(&emp, id).Error
+	return &emp, err
+}
+
+func (r *EmployeeRepository) GetAll(limit, offset int) ([]Employee, error) {
+	var emps []Employee
+	err := r.db.Limit(limit).Offset(offset).Find(&emps).Error
+	return emps, err
+}
+
+func (r *EmployeeRepository) Update(emp *Employee) error {
+	return r.db.Save(emp).Error
+}
+
+func (r *EmployeeRepository) Delete(id uint) error {
+	return r.db.Delete(&Employee{}, id).Error
+}
+
+type EmployeeService struct {
+	repo *EmployeeRepository
+}
+
+func NewEmployeeService(r *EmployeeRepository) *EmployeeService {
+	return &EmployeeService{repo: r}
+}
+
+func (s *EmployeeService) Create(emp *Employee) error {
+	return s.repo.Create(emp)
+}
+
+func (s *EmployeeService) GetByID(id uint) (*Employee, error) {
+	return s.repo.GetByID(id)
+}
+
+func (s *EmployeeService) GetAll(limit, offset int) ([]Employee, error) {
+	return s.repo.GetAll(limit, offset)
+}
+
+func (s *EmployeeService) Update(emp *Employee) error {
+	return s.repo.Update(emp)
+}
+
+func (s *EmployeeService) Delete(id uint) error {
+	return s.repo.Delete(id)
+}
+func Logger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		log.Println(c.Request.Method, c.Request.URL.Path, time.Since(start))
+	}
+}
+
+type EmployeeHandler struct {
+	service  *EmployeeService
+	validate *validator.Validate
+}
+
+func NewEmployeeHandler(s *EmployeeService) *EmployeeHandler {
+	return &EmployeeHandler{
+		service:  s,
+		validate: validator.New(),
+	}
+}
+
+func (h *EmployeeHandler) RegisterRoutes(r *gin.RouterGroup) {
+	r.POST("/", h.Create)
+	r.GET("/", h.GetAll)
+	r.GET("/:id", h.GetByID)
+	r.PUT("/:id", h.Update)
+	r.DELETE("/:id", h.Delete)
+}
+
+func (h *EmployeeHandler) Create(c *gin.Context) {
+	var req CreateEmployeeRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	emp := Employee{Name: req.Name, City: req.City}
+
+	if err := h.service.Create(&emp); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(201, emp)
+}
+
+func (h *EmployeeHandler) GetAll(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	data, err := h.service.GetAll(limit, offset)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, data)
+}
+
+func (h *EmployeeHandler) GetByID(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	data, err := h.service.GetByID(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+
+	c.JSON(200, data)
+}
+
+func (h *EmployeeHandler) Update(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	var req UpdateEmployeeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	emp, err := h.service.GetByID(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+
+	if req.Name != "" {
+		emp.Name = req.Name
+	}
+	if req.City != "" {
+		emp.City = req.City
+	}
+
+	if err := h.service.Update(emp); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, emp)
+}
+
+func (h *EmployeeHandler) Delete(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	if err := h.service.Delete(uint(id)); err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "deleted"})
+}
+func main() {
+	dbConn, err := Connect()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Auto migration
+	dbConn.AutoMigrate(&Employee{})
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	api := r.Group("/api")
+
+	// Wiring
+	repo := NewEmployeeRepository(dbConn)
+	service := NewEmployeeService(repo)
+	handler := NewEmployeeHandler(service)
+
+	handler.RegisterRoutes(api.Group("/employees"))
+
+	log.Println("🚀 Server running on :8080")
+	r.Run(":8080")
+}
