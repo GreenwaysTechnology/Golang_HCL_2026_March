@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package app;
+
+option go_package = "grpcapp/proto;proto";
+
+service AppService {
+
+  // 1. Unary
+  rpc SayHello (HelloRequest) returns (HelloResponse);
+
+  // 2. Server Streaming
+  rpc GetNumbers (NumberRequest) returns (stream NumberResponse);
+
+  // 3. Client Streaming
+  rpc UploadNumbers (stream NumberRequest) returns (NumberResponse);
+
+  // 4. Bidirectional Streaming
+  rpc Chat (stream ChatMessage) returns (stream ChatMessage);
+}
+
+// Messages
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloResponse {
+  string message = 1;
+}
+
+message NumberRequest {
+  int32 number = 1;
+}
+
+message NumberResponse {
+  int32 number = 1;
+}
+
+message ChatMessage {
+  string text = 1;
+}

@@ -1,0 +1,11 @@
+# For details on buf.yaml configuration, visit https://buf.build/docs/configuration/v2/buf-yaml
+# version: v2 is the modern standard
+version: v2
+modules:
+  - path: proto # This replaces the 'build: roots' from v1
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

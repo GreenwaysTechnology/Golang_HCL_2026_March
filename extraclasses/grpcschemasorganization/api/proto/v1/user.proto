@@ -1,0 +1,13 @@
+syntax = "proto3";
+package api.v1;
+option go_package = "github.com/username/grpcschemasorganization/gen/go/v1;userv1";
+
+service UserService {
+  rpc GetUser (UserRequest) returns (UserResponse);
+}
+
+message UserRequest { string user_id = 1; }
+message UserResponse {
+  string user_id = 1;
+  string username = 2;
+}

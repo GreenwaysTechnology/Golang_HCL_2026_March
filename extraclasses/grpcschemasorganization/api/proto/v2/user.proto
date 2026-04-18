@@ -1,0 +1,13 @@
+syntax = "proto3";
+package api.v2;
+option go_package = "github.com/username/grpcschemasorganization/gen/go/v2;userv2";
+
+service UserService {
+  rpc GetUser (UserRequest) returns (UserResponse);
+}
+
+message UserRequest { string user_id = 1; }
+message UserResponse {
+  string user_id = 1;
+  string full_name = 2; // The "v2" change
+}
